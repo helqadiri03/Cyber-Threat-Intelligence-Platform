@@ -1,0 +1,263 @@
+# Cyber Threats — full infrastructure stack
+# Recommended: allocate at least 8GB RAM to Docker Desktop / daemon.
+
+services:
+  # ---------------------------------------------------------------------------
+  # Messaging
+  # ---------------------------------------------------------------------------
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.1
+    container_name: zookeeper
+    hostname: zookeeper
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    networks:
+      - cyber-threats-net
+    restart: unless-stopped
+
+  kafka:
+    image: confluentinc/cp-kafka:7.6.1
+    container_name: kafka
+    hostname: kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"   # host / external clients
+      - "29092:29092" # optional direct host access to internal listener
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092,PLAINTEXT_HOST://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    networks:
+      - cyber-threats-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:29092"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 45s
+
+  # ---------------------------------------------------------------------------
+  # Databases & cache
+  # ---------------------------------------------------------------------------
+  cassandra:
+    image: cassandra:4.1
+    container_name: cassandra
+    hostname: cassandra
+    ports:
+      - "9042:9042"
+    volumes:
+      - cassandra_data:/var/lib/cassandra
+    environment:
+      MAX_HEAP_SIZE: 512M
+      HEAP_NEWSIZE: 128M
+      CASSANDRA_CLUSTER_NAME: cyber_threats_cluster
+    networks:
+      - cyber-threats-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "cqlsh -e 'DESCRIBE KEYSPACES' || exit 1"]
+      interval: 30s
+      timeout: 15s
+      retries: 10
+      start_period: 120s
+
+  mongodb:
+    image: mongo:7
+    container_name: mongodb
+    hostname: mongodb
+    ports:
+      # Host 27017 is often taken by a local mongod — override with MONGO_HOST_PORT in .env
+      - "${MONGO_HOST_PORT:-27018}:27017"
+    volumes:
+      - mongo_data:/data/db
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER:-admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:-changeme}
+      MONGO_INITDB_DATABASE: cyber_threats
+    networks:
+      - cyber-threats-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    hostname: redis
+    ports:
+      - "${REDIS_HOST_PORT:-6380}:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --appendfsync everysec
+    networks:
+      - cyber-threats-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ---------------------------------------------------------------------------
+  # Spark (official Apache image — bitnami/spark tags were removed from Docker Hub)
+  # ---------------------------------------------------------------------------
+  spark-master:
+    image: apache/spark:3.5.1
+    container_name: spark-master
+    hostname: spark-master
+    user: root
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master -h spark-master
+    ports:
+      - "8080:8080"   # Spark UI
+      - "7077:7077"   # Spark master RPC
+    environment:
+      SPARK_MASTER_HOST: spark-master
+      SPARK_MASTER_PORT: "7077"
+      SPARK_MASTER_WEBUI_PORT: "8080"
+    networks:
+      - cyber-threats-net
+    restart: unless-stopped
+
+  spark-worker:
+    image: apache/spark:3.5.1
+    container_name: spark-worker
+    hostname: spark-worker
+    user: root
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
+    depends_on:
+      - spark-master
+    ports:
+      - "8081:8081"   # worker UI
+    environment:
+      SPARK_WORKER_MEMORY: 2G
+      SPARK_WORKER_CORES: "2"
+      SPARK_WORKER_WEBUI_PORT: "8081"
+    networks:
+      - cyber-threats-net
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # Application
+  # ---------------------------------------------------------------------------
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: backend
+    hostname: backend
+    ports:
+      - "8000:8000"
+    depends_on:
+      cassandra:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      MONGODB_URI: mongodb://${MONGO_ROOT_USER:-admin}:${MONGO_ROOT_PASSWORD:-changeme}@mongodb:27017/?authSource=admin
+      MONGODB_DATABASE: cyber_intelligence
+      REDIS_URL: redis://redis:6379/0
+      CASSANDRA_HOSTS: cassandra
+      CASSANDRA_PORT: "9042"
+      SPARK_MASTER_URL: spark://spark-master:7077
+    networks:
+      - cyber-threats-net
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
+    container_name: frontend
+    hostname: frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    networks:
+      - cyber-threats-net
+    restart: unless-stopped
+
+  # Step 8 — create cyber_events_raw topic before producer starts
+  kafka-init:
+    image: confluentinc/cp-kafka:7.6.1
+    container_name: kafka-init
+    depends_on:
+      kafka:
+        condition: service_healthy
+    networks:
+      - cyber-threats-net
+    restart: "no"
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        kafka-topics --bootstrap-server kafka:29092 \
+          --create --topic cyber_events_raw \
+          --partitions 3 --replication-factor 1 \
+          --config retention.ms=86400000 \
+          --if-not-exists
+        kafka-configs --bootstrap-server kafka:29092 \
+          --entity-type topics --entity-name cyber_events_raw \
+          --alter --add-config retention.ms=86400000 || true
+        echo "Topic cyber_events_raw ready (3 partitions, retention.ms=86400000)"
+
+  # Step 9 — continuous Parquet → Kafka producer (auto-starts with stack)
+  kafka-producer:
+    build:
+      context: ./ingestion
+      dockerfile: Dockerfile
+    container_name: kafka-producer
+    command: ["produce_cyber_events.py", "--loop"]
+    volumes:
+      - ./stream_holdout:/data/stream_holdout:ro
+      - ./models:/app/models:ro
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      KAFKA_TOPIC: cyber_events_raw
+      STREAM_HOLDOUT_PATH: /data/stream_holdout
+      PRODUCER_SLEEP_SECONDS: ${PRODUCER_SLEEP_SECONDS:-0.05}
+      PRODUCER_LOOP: ${PRODUCER_LOOP:-true}
+      PRODUCER_BATCH_SIZE: ${PRODUCER_BATCH_SIZE:-500}
+      PRODUCER_MAX_ROWS: ${PRODUCER_MAX_ROWS:-0}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    depends_on:
+      kafka-init:
+        condition: service_completed_successfully
+      kafka:
+        condition: service_healthy
+    networks:
+      - cyber-threats-net
+    restart: unless-stopped
+
+networks:
+  cyber-threats-net:
+    name: cyber-threats-net
+    driver: bridge
+
+volumes:
+  cassandra_data:
+  mongo_data:
+  redis_data:

@@ -1,0 +1,13 @@
+.env
+node_modules/
+frontend/dist/
+__pycache__/
+*.pyc
+.venv/
+
+# Exclude ML models and pipeline directories
+feature_pipeline/
+rf_cv_model/
+stream_holdout/
+string_indexer/
+xgb_cv_model/

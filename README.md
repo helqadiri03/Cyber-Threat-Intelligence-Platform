@@ -100,3 +100,56 @@ The producer reads network telemetry packets (e.g. flow duration, packet lengths
   * **Attack Volume Timeline (Line Chart)**: Groups event counts in 1-hour buckets across the last 24 hours to monitor trend timelines.
   * **Top Attacking IPs**: Ranks source IP addresses generating the most malicious events.
 * Under **Predictions**, analysts search the database for specific source IPs, filter records by attack type, or check confidence percentages.
+
+## 📦 Data Samples per Storage
+
+### MongoDB (`cyber_intelligence.predictions` collection)
+```json
+{
+  "_id": "6a0f19c618ff6ecf10e12a13",
+  "source_ip": "10.0.100.1",
+  "predicted_attack": "Recon",
+  "confidence": 99.9985,
+  "risk_score": 100,
+  "model_name": "xgboost",
+  "actual_label": "Recon",
+  "sensor_id": "sensor-01",
+  "event": {
+    "kafka_key": "part-00005-f2f2a27d-bb56-467e-bd2f-5871b42f4633-c000.snappy.parquet-649",
+    "kafka_timestamp": "2026-05-21T14:42:00.119Z",
+    "Destination Port": 9099,
+    "Flow Duration": 57,
+    "Total Fwd Packets": 1,
+    "Total Backward Packets": 1,
+    "Total Length of Bwd Packets": 6,
+    "Label": "Recon",
+    "prediction": 5
+  },
+  "created_at": "2026-05-21T14:42:14.423Z"
+}
+```
+
+### Cassandra (`cyber_threats.attack_events` table)
+```sql
+SELECT * FROM cyber_threats.attack_events LIMIT 1;
+```
+Result example:
+| sensor_id | event_time                      | attack_type | confidence | destination_port | flow_duration | label     | metadata | source_ip |
+|-----------|---------------------------------|-------------|------------|------------------|---------------|-----------|----------|-----------|
+| sensor-01 | 2026-05-21 14:44:29.902000+0000| WebAttack   | 99.9677    | 80               | 5799027       | WebAttack | null     | 10.0.81.1 |
+
+### Redis (alert keys `alert:<timestamp>`)
+```json
+{
+  "sensor_id": "sensor-01",
+  "attack_type": "Botnet",
+  "source_ip": "10.0.81.1",
+  "predicted_attack": "Botnet",
+  "confidence": 99.9926,
+  "risk_score": 100.0,
+  "actual_label": "Botnet",
+  "event_time": "2026-05-21 14:40:39.957000",
+  "timestamp": "2026-05-21T14:40:42.635384+00:00"
+}
+```
+These examples illustrate the exact shape of the data stored in each persistence layer, which the frontend consumes via the WebSocket and REST APIs.

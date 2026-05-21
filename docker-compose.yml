@@ -136,7 +136,10 @@ services:
     restart: unless-stopped
 
   spark-worker:
-    image: apache/spark:3.5.1
+    build:
+      context: ./spark
+      dockerfile: Dockerfile
+    image: cyber-threats-spark:latest
     container_name: spark-worker
     hostname: spark-worker
     user: root
@@ -148,7 +151,63 @@ services:
     environment:
       SPARK_WORKER_MEMORY: 2G
       SPARK_WORKER_CORES: "2"
-      SPARK_WORKER_WEBUI_PORT: "8081"
+      PYSPARK_PYTHON: python3
+    volumes:
+      - ./models:/models:ro
+    networks:
+      - cyber-threats-net
+    restart: unless-stopped
+
+  # Phase 5 — Spark Structured Streaming + inference (spark-submit at startup)
+  spark-streaming:
+    build:
+      context: ./spark
+      dockerfile: Dockerfile
+    image: cyber-threats-spark:latest
+    container_name: spark-streaming
+    entrypoint: ["/entrypoint.sh"]
+    hostname: spark-streaming
+    depends_on:
+      spark-master:
+        condition: service_started
+      spark-worker:
+        condition: service_started
+      kafka-init:
+        condition: service_completed_successfully
+      kafka:
+        condition: service_healthy
+      cassandra:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./models:/models:ro
+      - spark_checkpoint:/opt/spark/checkpoint
+    environment:
+      SPARK_MASTER_URL: spark://spark-master:7077
+      SPARK_CHECKPOINT_DIR: /opt/spark/checkpoint/cyber_events
+      SPARK_DRIVER_MEMORY: ${SPARK_DRIVER_MEMORY:-2g}
+      SPARK_EXECUTOR_MEMORY: ${SPARK_EXECUTOR_MEMORY:-2g}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      KAFKA_TOPIC: cyber_events_raw
+      KAFKA_STARTING_OFFSETS: ${KAFKA_STARTING_OFFSETS:-earliest}
+      MONGODB_URI: mongodb://${MONGO_ROOT_USER:-admin}:${MONGO_ROOT_PASSWORD:-changeme}@mongodb:27017/?authSource=admin
+      MONGODB_DATABASE: cyber_intelligence
+      REDIS_URL: redis://redis:6379/0
+      REDIS_ALERTS_CHANNEL: channel:alerts
+      CASSANDRA_HOSTS: cassandra
+      CASSANDRA_PORT: "9042"
+      CASSANDRA_KEYSPACE: cyber_threats
+      MODEL_FEATURE_PIPELINE: /models/preprocessing/feature_pipeline
+      MODEL_XGB_CLASSIFIER: /models/classifiers/xgboost_intrusion_detector
+      MODEL_RF_CLASSIFIER: /models/classifiers/random_forest_fallback
+      MODEL_LABEL_INDEXER: /models/label_decoder/string_indexer
+      RISK_ALERT_THRESHOLD: ${RISK_ALERT_THRESHOLD:-80}
+      DEFAULT_SENSOR_ID: sensor-01
+      STREAM_TRIGGER_INTERVAL: ${STREAM_TRIGGER_INTERVAL:-10 seconds}
+      LOG_LEVEL: INFO
     networks:
       - cyber-threats-net
     restart: unless-stopped
@@ -261,3 +320,4 @@ volumes:
   cassandra_data:
   mongo_data:
   redis_data:
+  spark_checkpoint:

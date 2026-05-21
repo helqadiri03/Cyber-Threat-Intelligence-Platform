@@ -1,0 +1,13 @@
+# Spark Python dependencies — pyspark is already in the base image (apache/spark:3.5.1)
+# cassandra-driver is NOT needed: Cassandra I/O goes through the spark-cassandra-connector JAR.
+
+# pyspark.ml.functions (vector_to_array) requires pandas at import time in PySpark 3.5.x
+pandas>=1.4.4,<3.0.0
+pyarrow>=12.0.0
+
+# XGBoost needs scikit-learn to load CrossValidatorModel saved with sklearn integration
+scikit-learn>=1.3.0
+
+xgboost>=2.0.0,<3.0.0
+pymongo==4.10.1
+redis==5.2.1

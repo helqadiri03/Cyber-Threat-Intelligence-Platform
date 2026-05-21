@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
@@ -92,21 +92,64 @@ class MongoDBService:
         return items, total
 
     async def aggregate_attack_statistics(self) -> dict[str, Any]:
-        pipeline = [
+        now = datetime.now(timezone.utc)
+        recent_cutoff = now - timedelta(hours=24)
+
+        # ── Attack type breakdown ──────────────────────────────────────────
+        breakdown_pipeline = [
             {"$group": {"_id": "$predicted_attack", "count": {"$sum": 1}}},
             {"$sort": {"count": -1}},
         ]
-        breakdown = []
+        breakdown: list[dict[str, Any]] = []
         total = 0
-        async for row in self.db.predictions.aggregate(pipeline):
+        async for row in self.db.predictions.aggregate(breakdown_pipeline):
             count = int(row["count"])
             total += count
             breakdown.append({"attack_type": row["_id"], "count": count})
 
         top_attack = breakdown[0]["attack_type"] if breakdown else None
+
+        # ── Top attacking IPs (top 10) ─────────────────────────────────────
+        ip_pipeline = [
+            {"$group": {"_id": "$source_ip", "count": {"$sum": 1}}},
+            {"$sort": {"count": -1}},
+            {"$limit": 10},
+            {"$project": {"source_ip": "$_id", "count": 1, "_id": 0}},
+        ]
+        top_ips: list[dict[str, Any]] = []
+        async for row in self.db.predictions.aggregate(ip_pipeline):
+            top_ips.append({"source_ip": row["source_ip"], "count": int(row["count"])})
+
+        # ── Timeline — events per 1-hour bucket over last 24h ──────────────
+        timeline_pipeline = [
+            {"$match": {"created_at": {"$gte": recent_cutoff}}},
+            {
+                "$group": {
+                    "_id": {
+                        "$dateTrunc": {
+                            "date": "$created_at",
+                            "unit": "hour",
+                            "binSize": 1,
+                        }
+                    },
+                    "count": {"$sum": 1},
+                }
+            },
+            {"$sort": {"_id": 1}},
+            {"$project": {"timestamp": "$_id", "count": 1, "_id": 0}},
+        ]
+        timeline: list[dict[str, Any]] = []
+        async for row in self.db.predictions.aggregate(timeline_pipeline):
+            timeline.append({
+                "timestamp": row["timestamp"],
+                "count": int(row["count"]),
+            })
+
         return {
             "total_predictions": total,
             "top_attack": top_attack,
             "attack_breakdown": breakdown,
-            "updated_at": datetime.now(timezone.utc),
+            "top_ips": top_ips,
+            "timeline": timeline,
+            "updated_at": now,
         }

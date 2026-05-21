@@ -165,6 +165,22 @@ class RedisService:
         alerts.sort(key=lambda a: a.timestamp, reverse=True)
         return alerts
 
+    async def get_total_alerts(self) -> int:
+        """Calculate the total number of alerts using the attack_type counters."""
+        total = 0
+        keys = [key async for key in self.client.scan_iter(match="counter:attack_type:*")]
+        if not keys:
+            return 0
+        
+        values = await self.client.mget(keys)
+        for v in values:
+            if v:
+                try:
+                    total += int(v)
+                except ValueError:
+                    pass
+        return total
+
     async def get_cached_statistics(self) -> StatisticsResponse | None:
         raw = await self.client.get(self._settings.redis_stats_key)
         if not raw:
@@ -176,28 +192,23 @@ class RedisService:
 
         ttl = await self.client.ttl(self._settings.redis_stats_key)
         updated_raw = data.get("updated_at")
+        data["source"] = "redis_cache"
+        data["cache_ttl_seconds"] = ttl if ttl and ttl > 0 else None
         if isinstance(updated_raw, str):
-            updated_at = datetime.fromisoformat(updated_raw.replace("Z", "+00:00"))
-        else:
-            updated_at = datetime.now(timezone.utc)
+            data["updated_at"] = updated_raw.replace("Z", "+00:00")
+        
+        # Handle legacy attack_breakdown format if it was a dict
+        if isinstance(data.get("attack_breakdown"), dict):
+            data["attack_breakdown"] = [
+                {"attack_type": k, "count": int(v)}
+                for k, v in data["attack_breakdown"].items()
+            ]
 
-        breakdown = [
-            AttackTypeCount(attack_type=k, count=int(v))
-            for k, v in (data.get("attack_breakdown") or {}).items()
-        ] if isinstance(data.get("attack_breakdown"), dict) else []
-
-        return StatisticsResponse(
-            source="redis_cache",
-            total_predictions=int(data.get("total_predictions", 0)),
-            total_alerts=int(data.get("total_alerts", 0)),
-            top_attack=data.get("top_attack"),
-            attack_breakdown=breakdown,
-            updated_at=updated_at,
-            cache_ttl_seconds=ttl if ttl and ttl > 0 else None,
-            extra={k: v for k, v in data.items() if k not in {
-                "total_predictions", "total_alerts", "top_attack", "attack_breakdown", "updated_at"
-            }},
-        )
+        try:
+            return StatisticsResponse.model_validate(data)
+        except Exception as e:
+            LOG.error("Failed to parse cached statistics: %s", e)
+            return None
 
     async def set_cached_statistics(self, stats: StatisticsResponse) -> None:
         payload = stats.model_dump(mode="json")

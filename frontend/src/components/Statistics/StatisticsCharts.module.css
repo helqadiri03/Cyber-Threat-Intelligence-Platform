@@ -1,0 +1,112 @@
+.wrapper { display: flex; flex-direction: column; gap: 16px; }
+
+.statRow {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+@media (max-width: 900px) { .statRow { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 500px) { .statRow { grid-template-columns: 1fr; } }
+
+.statCard {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px 20px;
+}
+
+.statIcon {
+  padding: 10px;
+  background: var(--accent-dim);
+  border-radius: var(--radius-md);
+  flex-shrink: 0;
+}
+
+.statLabel {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.chartsRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+@media (max-width: 900px) { .chartsRow { grid-template-columns: 1fr; } }
+
+.chartCard { padding: 18px 20px; }
+.wide { grid-column: 1 / -1; }
+
+.chartHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.chartHeader h3 { font-size: 0.92rem; flex: 1; }
+
+.updated { font-size: 0.72rem; color: var(--text-muted); }
+
+.chartSkeleton { height: 220px; width: 100%; }
+
+.noData {
+  height: 160px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  font-size: 0.84rem;
+}
+
+.tooltip {
+  background: #141824;
+  border: 1px solid var(--border-bright);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  font-size: 0.82rem;
+}
+.tooltipLabel { color: var(--text-muted); margin-bottom: 4px; }
+
+/* IP Rankings */
+.ipList { display: flex; flex-direction: column; gap: 10px; }
+
+.ipRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ipRank {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  width: 14px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.ipBar {
+  flex: 1;
+  height: 6px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.ipBarFill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 600ms ease;
+  opacity: 0.8;
+}
+
+.ipCount {
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+  font-weight: 600;
+  min-width: 40px;
+  text-align: right;
+}

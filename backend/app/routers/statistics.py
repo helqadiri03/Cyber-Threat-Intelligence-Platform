@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends
 
 from app.dependencies import get_mongodb, get_redis
-from app.models.statistics import AttackTypeCount, StatisticsResponse
+from app.models.statistics import AttackTypeCount, StatisticsResponse, TimelineBucket, TopIpEntry
 from app.services.mongodb import MongoDBService
 from app.services.redis import RedisService
 
@@ -27,14 +27,24 @@ async def get_statistics(
             return cached
 
     agg = await mongodb.aggregate_attack_statistics()
+    total_alerts = await redis.get_total_alerts()
+    
     stats = StatisticsResponse(
         source="mongodb_aggregation",
         total_predictions=agg["total_predictions"],
-        total_alerts=cached.total_alerts if cached else 0,
+        total_alerts=total_alerts,
         top_attack=agg["top_attack"],
         attack_breakdown=[
             AttackTypeCount(attack_type=row["attack_type"], count=row["count"])
             for row in agg["attack_breakdown"]
+        ],
+        top_ips=[
+            TopIpEntry(source_ip=row["source_ip"], count=row["count"])
+            for row in agg["top_ips"]
+        ],
+        timeline=[
+            TimelineBucket(timestamp=row["timestamp"], count=row["count"])
+            for row in agg["timeline"]
         ],
         updated_at=agg["updated_at"],
     )

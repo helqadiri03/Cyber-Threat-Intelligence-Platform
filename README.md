@@ -30,13 +30,28 @@ graph TD
     B -->|Active WebSocket Stream| F[React Dashboard UI]
     B -->|REST Control Interface| F
     
-    style SS fill:#f96,stroke:#333,stroke-width:2px
-    style XGB fill:#bbf,stroke:#333,stroke-width:1px
-    style C fill:#9cf,stroke:#333,stroke-width:1px
-    style M fill:#9f9,stroke:#333,stroke-width:1px
-    style R fill:#f99,stroke:#333,stroke-width:1px
-    style B fill:#009688,stroke:#fff,stroke-width:1px
+    style KP fill:#2a2a2a,stroke:#555,stroke-width:1px,color:#fff
+    style K fill:#2a2a2a,stroke:#555,stroke-width:1px,color:#fff
+    style SS fill:#444,stroke:#666,stroke-width:2px,color:#fff
+    style XGB fill:#2a2a2a,stroke:#555,stroke-width:1px,color:#fff
+    style C fill:#333,stroke:#666,stroke-width:1px,color:#fff
+    style M fill:#333,stroke:#666,stroke-width:1px,color:#fff
+    style R fill:#333,stroke:#666,stroke-width:1px,color:#fff
+    style B fill:#444,stroke:#666,stroke-width:1px,color:#fff
+    style F fill:#2a2a2a,stroke:#555,stroke-width:1px,color:#fff
 ```
+
+---
+
+## 💾 Storage Selection & Role Rationale
+
+To support high-velocity ingest speeds, complex analytical lookups, and sub-millisecond dashboard updates, CTIP assigns specialized roles to three distinct data layers based on their unique performance profiles:
+
+| Database | Primary Role | Selection Justification | Allocation Details |
+| :--- | :--- | :--- | :--- |
+| **Cassandra** | Raw Telemetry Log | High-throughput, masterless write scalability with zero write locks. | Stores raw event telemetries indexed by sensor and time. Removed all ML attributes to act as an uncorruptible forensic log. |
+| **MongoDB** | Threat Intelligence | Fast flexible nested indexing and powerful aggregation engines. | Stores enriched ML classification documents, latency histories, and aggregated attacker profile summaries. |
+| **Redis** | In-Memory Alert Feeds | Sub-millisecond read/writes, pub/sub channels, and atomic counters. | Manages the live alert websocket buffer (1-hour key expiry) and powers fast threat statistics. |
 
 ---
 

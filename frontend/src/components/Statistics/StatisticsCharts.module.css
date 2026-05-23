@@ -1,34 +1,69 @@
-.wrapper { display: flex; flex-direction: column; gap: 16px; }
+.wrapper { display: flex; flex-direction: column; gap: 18px; }
 
+/* ── Stat Cards ──────────────────────────────────────────────────────────── */
 .statRow {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
+  gap: 14px;
 }
-
-@media (max-width: 900px) { .statRow { grid-template-columns: repeat(2, 1fr); } }
-@media (max-width: 500px) { .statRow { grid-template-columns: 1fr; } }
+@media (max-width: 1000px) { .statRow { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 520px)  { .statRow { grid-template-columns: 1fr; } }
 
 .statCard {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 18px 20px;
+  gap: 16px;
+  padding: 20px 22px;
+  position: relative;
+  overflow: hidden;
+  cursor: default;
+  transition: transform var(--transition), box-shadow var(--transition);
+}
+.statCard:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-card), 0 8px 32px rgba(0,0,0,0.4);
+}
+
+/* Decorative corner accent */
+.statCard::after {
+  content: '';
+  position: absolute;
+  top: 0; right: 0;
+  width: 60px; height: 60px;
+  border-radius: 0 var(--radius-lg) 0 60px;
+  opacity: 0.06;
+  pointer-events: none;
 }
 
 .statIcon {
-  padding: 10px;
-  background: var(--accent-dim);
+  width: 46px; height: 46px;
   border-radius: var(--radius-md);
+  display: flex; align-items: center; justify-content: center;
   flex-shrink: 0;
+  position: relative;
 }
+.statIcon::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-md);
+  opacity: 0.15;
+  background: currentColor;
+}
+
+.statBody {}
 
 .statLabel {
-  font-size: 0.78rem;
+  font-size: 0.72rem;
   color: var(--text-muted);
-  margin-top: 2px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  margin-top: 4px;
+  font-family: var(--font-head);
 }
 
+/* ── Charts Row ──────────────────────────────────────────────────────────── */
 .chartsRow {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -36,61 +71,106 @@
 }
 @media (max-width: 900px) { .chartsRow { grid-template-columns: 1fr; } }
 
-.chartCard { padding: 18px 20px; }
+.chartCard {
+  padding: 20px 22px;
+  transition: transform var(--transition), box-shadow var(--transition);
+}
+.chartCard:hover {
+  transform: translateY(-1px);
+}
+
 .wide { grid-column: 1 / -1; }
 
 .chartHeader {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 16px;
+  gap: 9px;
+  margin-bottom: 18px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
 }
-.chartHeader h3 { font-size: 0.92rem; flex: 1; }
+.chartHeader h3 {
+  font-size: 0.88rem;
+  flex: 1;
+  color: var(--text-primary);
+}
 
-.updated { font-size: 0.72rem; color: var(--text-muted); }
+.chartBadge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 2px 8px;
+  border-radius: var(--radius-xs);
+  background: var(--accent-dim);
+  color: var(--accent);
+  font-family: var(--font-mono);
+  border: 1px solid rgba(0,212,255,0.15);
+}
 
-.chartSkeleton { height: 220px; width: 100%; }
+.updated {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+.chartSkeleton { height: 220px; width: 100%; border-radius: var(--radius-sm); }
 
 .noData {
-  height: 160px;
+  height: 180px;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 10px;
   color: var(--text-muted);
-  font-size: 0.84rem;
-}
-
-.tooltip {
-  background: #141824;
-  border: 1px solid var(--border-bright);
-  border-radius: var(--radius-sm);
-  padding: 10px 14px;
   font-size: 0.82rem;
+  font-family: var(--font-head);
 }
-.tooltipLabel { color: var(--text-muted); margin-bottom: 4px; }
 
-/* IP Rankings */
-.ipList { display: flex; flex-direction: column; gap: 10px; }
+/* ── Custom Tooltip ──────────────────────────────────────────────────────── */
+.tooltip {
+  background: #0d1120;
+  border: 1px solid var(--border-bright);
+  border-radius: var(--radius-md);
+  padding: 12px 16px;
+  font-size: 0.8rem;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+  min-width: 120px;
+}
+.tooltipLabel {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 6px;
+  font-family: var(--font-head);
+}
+
+/* ── IP Rankings ─────────────────────────────────────────────────────────── */
+.ipList { display: flex; flex-direction: column; gap: 11px; padding-top: 2px; }
 
 .ipRow {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
 
 .ipRank {
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   font-weight: 700;
   color: var(--text-muted);
-  width: 14px;
-  text-align: right;
+  width: 16px;
+  text-align: center;
   flex-shrink: 0;
+  font-family: var(--font-mono);
 }
 
 .ipBar {
   flex: 1;
-  height: 6px;
-  background: rgba(255,255,255,0.06);
+  height: 5px;
+  background: rgba(255,255,255,0.05);
   border-radius: 999px;
   overflow: hidden;
 }
@@ -98,15 +178,22 @@
 .ipBarFill {
   height: 100%;
   border-radius: 999px;
-  transition: width 600ms ease;
-  opacity: 0.8;
+  transition: width 800ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.ipAddr {
+  font-family: var(--font-mono);
+  font-size: 0.77rem;
+  min-width: 108px;
+  color: var(--text-secondary);
 }
 
 .ipCount {
-  font-size: 0.78rem;
+  font-size: 0.75rem;
   font-variant-numeric: tabular-nums;
-  color: var(--text-secondary);
+  color: var(--text-primary);
   font-weight: 600;
-  min-width: 40px;
+  min-width: 46px;
   text-align: right;
+  font-family: var(--font-mono);
 }

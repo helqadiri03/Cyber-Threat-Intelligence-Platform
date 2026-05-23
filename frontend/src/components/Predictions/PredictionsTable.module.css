@@ -1,32 +1,44 @@
 .panel { display: flex; flex-direction: column; overflow: hidden; }
 
+/* ── Header ──────────────────────────────────────────────────────────────── */
 .header {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 18px 20px 14px;
+  padding: 18px 22px 15px;
   border-bottom: 1px solid var(--border);
   flex-wrap: wrap;
 }
-.total {
-  font-size: 0.78rem;
-  color: var(--text-muted);
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
-  padding: 2px 10px;
-  border-radius: 999px;
+
+.headerTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
+
+.total {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border);
+  padding: 3px 12px;
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-weight: 600;
+}
+
 .spacer { flex: 1; }
+.toggleRow { display: flex; align-items: center; gap: 9px; }
 
-.toggleRow { display: flex; align-items: center; gap: 8px; }
-
+/* ── Filters ─────────────────────────────────────────────────────────────── */
 .filters {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 14px 20px;
+  padding: 13px 22px;
   border-bottom: 1px solid var(--border);
   flex-wrap: wrap;
+  background: rgba(255,255,255,0.012);
 }
 
 .ipSearch {
@@ -35,32 +47,82 @@
   gap: 6px;
   flex: 1;
   min-width: 200px;
-  max-width: 320px;
+  max-width: 340px;
 }
 
+/* ── Attack Type Badge ───────────────────────────────────────────────────── */
 .attackBadge {
   display: inline-block;
-  padding: 2px 10px;
+  padding: 3px 10px;
   border-radius: var(--radius-sm);
-  font-size: 0.78rem;
-  font-weight: 600;
+  font-size: 0.76rem;
+  font-weight: 700;
+  font-family: var(--font-head);
   background: var(--accent-dim);
   color: var(--accent);
+  border: 1px solid rgba(0,212,255,0.15);
   white-space: nowrap;
+  letter-spacing: 0.02em;
 }
 
-.skeletonCell { height: 16px; width: 80%; }
+/* Attack-specific colors */
+.attackBadge[data-type="DoS/DDoS"]     { background: rgba(255,45,85,0.08); color: var(--sev-critical); border-color: var(--sev-critical-bdr); }
+.attackBadge[data-type="BruteForce"]   { background: rgba(255,107,53,0.08); color: var(--sev-high); border-color: var(--sev-high-bdr); }
+.attackBadge[data-type="Botnet"]       { background: rgba(124,77,255,0.1); color: #b48eff; border-color: rgba(124,77,255,0.3); }
+.attackBadge[data-type="WebAttack"]    { background: rgba(255,193,7,0.08); color: var(--sev-medium); border-color: var(--sev-medium-bdr); }
+.attackBadge[data-type="Normal"]       { background: var(--sev-low-bg); color: var(--sev-low); border-color: var(--sev-low-bdr); }
+.attackBadge[data-type="Recon"]        { background: rgba(0,212,255,0.08); color: var(--accent); border-color: var(--border-accent); }
 
+/* ── Skeleton ────────────────────────────────────────────────────────────── */
+.skeletonCell { height: 15px; width: 75%; border-radius: 4px; }
+
+/* ── Row Number ──────────────────────────────────────────────────────────── */
+.rowNum {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+}
+
+/* ── Confidence Bar ──────────────────────────────────────────────────────── */
+.confWrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.confBar {
+  width: 50px;
+  height: 4px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.confFill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 600ms ease;
+}
+
+/* ── Pagination ──────────────────────────────────────────────────────────── */
 .pagination {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 20px;
+  padding: 13px 22px;
   border-top: 1px solid var(--border);
   flex-wrap: wrap;
   gap: 10px;
+  background: rgba(255,255,255,0.012);
 }
+
+.pageInfo {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
 .pageControls { display: flex; align-items: center; gap: 4px; }
 
 @keyframes spin { to { transform: rotate(360deg); } }
-.spin { animation: spin 800ms linear infinite; }
+.spin { animation: spin 700ms linear infinite; }

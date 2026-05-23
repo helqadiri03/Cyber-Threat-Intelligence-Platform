@@ -130,6 +130,8 @@ def create_batch_processor(spark: SparkSession, models: ModelBundle):
     cassandra_ks = os.getenv("CASSANDRA_KEYSPACE", "cyber_threats")
     risk_threshold = float(os.getenv("RISK_ALERT_THRESHOLD", "80"))
     alerts_channel = os.getenv("REDIS_ALERTS_CHANNEL", "channel:alerts")
+    # Alerts are ephemeral — expire after 1 hour by default (configurable)
+    alert_ttl_seconds = int(os.getenv("REDIS_ALERT_TTL_SECONDS", "3600"))
 
     def process_batch(batch_df: DataFrame, epoch_id: int) -> None:
         import time as _time
@@ -175,6 +177,7 @@ def create_batch_processor(spark: SparkSession, models: ModelBundle):
                 redis_url,
                 risk_threshold=risk_threshold,
                 alerts_channel=alerts_channel,
+                alert_ttl_seconds=alert_ttl_seconds,
             )
             LOG.info("[epoch=%s] Redis alerts complete", epoch_id)
         except Exception as exc:

@@ -146,7 +146,17 @@ def publish_redis_alerts(
     *,
     risk_threshold: float,
     alerts_channel: str,
+    alert_ttl_seconds: int = 3600,
 ) -> None:
+    """Publish minimal hot-alert data to Redis pub/sub and store with TTL.
+
+    ARCHITECTURE NOTE:
+    Redis is an in-memory ephemeral store — keep alert payloads small.
+    Full intelligence documents (confidence, model metadata, raw event fields)
+    are stored in MongoDB. Redis stores only what the real-time dashboard needs:
+      - attack_type, source_ip, risk_score, timestamp
+    TTL ensures alerts expire automatically (default: 1 hour).
+    """
     import redis
 
     if not rows:
@@ -164,20 +174,19 @@ def publish_redis_alerts(
             continue
 
         ts_ms = int(time.time() * 1000)
+
+        # Minimal payload — only what the real-time dashboard needs.
+        # Full details are in MongoDB; Redis is the hot-path notification layer.
         alert = {
-            "sensor_id": row.get("sensor_id"),
-            "attack_type": attack,
-            "source_ip": row["source_ip"],
-            "predicted_attack": attack,
-            # Probability [0,1]; multiply by 100 for percentage display
-            "confidence": confidence,
-            "risk_score": risk,
-            "prediction_latency_ms": row.get("prediction_latency_ms"),
-            "actual_label": row.get("Label"),
-            "event_time": str(row.get("event_time")),
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "attack_type":  attack,
+            "source_ip":    row["source_ip"],
+            "risk_score":   risk,
+            "sensor_id":    row.get("sensor_id"),
+            "timestamp":    datetime.now(timezone.utc).isoformat(),
         }
-        pipe.set(f"alert:{ts_ms}", json.dumps(alert), ex=86400)
+
+        # Store with TTL — alerts are ephemeral real-time data
+        pipe.set(f"alert:{ts_ms}", json.dumps(alert), ex=alert_ttl_seconds)
         pipe.incr(f"counter:attack_type:{attack}")
         pipe.publish(alerts_channel, json.dumps(alert))
         alert_count += 1
@@ -185,4 +194,7 @@ def publish_redis_alerts(
     if alert_count:
         pipe.execute()
     client.close()
-    LOG.info("Redis published %s high-risk alerts (threshold=%s)", alert_count, risk_threshold)
+    LOG.info(
+        "Redis published %s high-risk alerts (threshold=%s, ttl=%ss)",
+        alert_count, risk_threshold, alert_ttl_seconds,
+    )

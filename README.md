@@ -63,22 +63,20 @@ The producer reads network telemetry packets (e.g. flow duration, packet lengths
 ### 3. Real-Time Inference (The Spark Pipeline)
 * Spark Streaming pulls mini-batches of JSON network events from Kafka.
 * It feeds the raw features into the loaded `SparkXGBClassifierModel` representing the pre-trained intrusion detector.
-* The model produces a classification (e.g. `DoS/DDoS`) along with a confidence rating (e.g. `99.98%`).
-* Raw logs are archived in **Cassandra**, and the classified predictions are written asynchronously to **MongoDB**.
+* The model produces a classification (e.g. `DoS/DDoS`) along with a probability confidence score (e.g. `0.9998` — stored as `[0, 1]`, not a percentage).
+* Raw network telemetry is archived in **Cassandra** (no AI fields), and enriched intelligence predictions are written asynchronously to **MongoDB**.
 
 ### 4. Live Alert Triggering (Redis + WebSockets)
 * The Spark job computes a **Risk Score** (from `0` to `100`) based on the classification and confidence level.
 * If the risk exceeds the target threshold (e.g., `Risk > 80`), the Spark job writes an alert key into **Redis** (`alert:<timestamp>`) and broadcasts a payload to the Redis channel `channel:alerts`.
-* The **FastAPI backend** listens to the `channel:alerts` Redis channel and receives this payload:
+* The **FastAPI backend** listens to the `channel:alerts` Redis channel and receives this minimal hot-alert payload:
   ```json
   {
-    "type": "alert",
-    "data": {
-      "source_ip": "10.0.81.1",
-      "predicted_attack": "DoS/DDoS",
-      "risk_score": 100.0,
-      "timestamp": "2026-05-21T14:20:33Z"
-    }
+    "attack_type": "DoS/DDoS",
+    "source_ip": "10.0.81.1",
+    "risk_score": 100.0,
+    "sensor_id": "sensor-01",
+    "timestamp": "2026-05-21T14:20:33.412Z"
   }
   ```
 * The backend immediately broadcasts this payload to all connected React clients via WebSocket connections at `/ws/live`.
@@ -103,14 +101,20 @@ The producer reads network telemetry packets (e.g. flow duration, packet lengths
 
 ## 📦 Data Samples per Storage
 
+> Each database has a distinct architectural role. Data is purposefully split to keep each store optimised for its workload.
+
 ### MongoDB (`cyber_intelligence.predictions` collection)
+
+> **Intelligence layer** — full enriched prediction documents with AI outputs, model metadata, and a raw event snapshot.
+
 ```json
 {
   "_id": "6a0f19c618ff6ecf10e12a13",
   "source_ip": "10.0.100.1",
   "predicted_attack": "Recon",
-  "confidence": 99.9985,
-  "risk_score": 100,
+  "confidence": 0.999985,
+  "risk_score": 85.99,
+  "prediction_latency_ms": 42,
   "model_name": "xgboost",
   "actual_label": "Recon",
   "sensor_id": "sensor-01",
@@ -129,27 +133,53 @@ The producer reads network telemetry packets (e.g. flow duration, packet lengths
 }
 ```
 
+> **Key design decisions:**
+> - `confidence` is stored as a probability in `[0, 1]` (ML-standard). Multiply by 100 for percentage display.
+> - `risk_score` is derived: `confidence × 100 × 0.6 + severity_weight × 0.4` → result in `[0, 100]`.
+> - `prediction_latency_ms` measures end-to-end Spark inference time for streaming SLA monitoring.
+
+---
+
 ### Cassandra (`cyber_threats.attack_events` table)
+
+> **Raw telemetry layer** — only network flow fields. No AI outputs (those belong to MongoDB).
+> Partitioned by `sensor_id` for per-sensor time-series queries; clustered by `event_time DESC` for efficient latest-events retrieval.
+
 ```sql
 SELECT * FROM cyber_threats.attack_events LIMIT 1;
 ```
-Result example:
-| sensor_id | event_time                      | attack_type | confidence | destination_port | flow_duration | label     | metadata | source_ip |
-|-----------|---------------------------------|-------------|------------|------------------|---------------|-----------|----------|-----------|
-| sensor-01 | 2026-05-21 14:44:29.902000+0000| WebAttack   | 99.9677    | 80               | 5799027       | WebAttack | null     | 10.0.81.1 |
 
-### Redis (alert keys `alert:<timestamp>`)
+Result example:
+
+| sensor_id | event_time                       | source_ip  | destination_port | flow_duration | label     | metadata |
+|-----------|----------------------------------|------------|-----------------|---------------|-----------|----------|
+| sensor-01 | 2026-05-21 14:44:29.902000+0000 | 10.0.81.1  | 80              | 5799027       | WebAttack | null     |
+
+> **Key design decisions:**
+> - `attack_type` and `confidence` intentionally absent — AI outputs belong in MongoDB (intelligence layer).
+> - `label` is the ground-truth dataset label, **not** an ML prediction.
+> - `CLUSTERING ORDER BY (event_time DESC)` enables O(1) retrieval of the most recent events per sensor.
+
+---
+
+### Redis (alert keys `alert:<timestamp_ms>`, TTL = 1 hour)
+
+> **Hot-path notification layer** — minimal ephemeral payload for real-time dashboard alerts.
+> Full intelligence details are in MongoDB; Redis holds only what the live feed needs.
+
 ```json
 {
-  "sensor_id": "sensor-01",
   "attack_type": "Botnet",
-  "source_ip": "10.0.81.1",
-  "predicted_attack": "Botnet",
-  "confidence": 99.9926,
-  "risk_score": 100.0,
-  "actual_label": "Botnet",
-  "event_time": "2026-05-21 14:40:39.957000",
-  "timestamp": "2026-05-21T14:40:42.635384+00:00"
+  "source_ip":   "10.0.81.1",
+  "risk_score":  100.0,
+  "sensor_id":   "sensor-01",
+  "timestamp":   "2026-05-21T14:40:42.635384+00:00"
 }
 ```
+
+> **Key design decisions:**
+> - Payload is intentionally minimal (5 fields only) — Redis is in-memory; bloated payloads waste RAM.
+> - TTL of `3600 s` (1 hour) is set on every key (`redis.set(key, value, ex=3600)`). Alerts self-expire.
+> - Attack counters (`counter:attack_type:<type>`) are maintained separately for statistics aggregation.
+
 These examples illustrate the exact shape of the data stored in each persistence layer, which the frontend consumes via the WebSocket and REST APIs.

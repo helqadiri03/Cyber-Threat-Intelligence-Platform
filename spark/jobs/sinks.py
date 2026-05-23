@@ -39,16 +39,21 @@ def compute_risk_score(confidence: float, attack_type: str) -> float:
 
 
 def write_cassandra_events(df: DataFrame, keyspace: str) -> None:
+    """Write raw network telemetry to Cassandra.
+
+    ARCHITECTURE NOTE:
+    Only raw network flow fields are stored here.
+    AI outputs (predicted_attack, confidence, model_name) are written
+    to MongoDB by write_mongo_predictions() — not here.
+    """
     (
         df.select(
             F.col("sensor_id").alias("sensor_id"),
             F.col("event_time").alias("event_time"),
-            F.col("predicted_attack").alias("attack_type"),
             F.col("source_ip").alias("source_ip"),
             F.col("Destination Port").cast("int").alias("destination_port"),
             F.col("Flow Duration").cast("long").alias("flow_duration"),
             F.col("Label").alias("label"),
-            F.col("confidence").cast("float").alias("confidence"),
             F.lit(None).cast("map<string,string>").alias("metadata"),
         )
         .write.format("org.apache.spark.sql.cassandra")

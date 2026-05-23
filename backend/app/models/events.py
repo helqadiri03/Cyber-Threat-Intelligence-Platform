@@ -5,17 +5,21 @@ from pydantic import BaseModel, Field, field_validator
 
 
 class EventCreate(BaseModel):
-    """Payload for POST /events — maps to Cassandra attack_events."""
+    """Payload for POST /events — maps to Cassandra attack_events.
 
-    sensor_id: str = Field(..., min_length=1, max_length=128)
-    event_time: datetime
-    attack_type: str = Field(..., min_length=1, max_length=64)
-    source_ip: str = Field(..., min_length=7, max_length=45)
-    destination_port: int = Field(..., ge=0, le=65535)
-    flow_duration: int = Field(..., ge=0)
-    label: str | None = Field(default=None, max_length=64)
-    confidence: float | None = Field(default=None, ge=0.0, le=1.0)
-    metadata: dict[str, str] = Field(default_factory=dict)
+    ARCHITECTURE NOTE:
+    Cassandra is the raw telemetry layer. Only network flow fields are stored here.
+    AI outputs (confidence, predicted_attack, model metadata) belong in MongoDB.
+    """
+
+    sensor_id:        str            = Field(..., min_length=1, max_length=128)
+    event_time:       datetime
+    source_ip:        str            = Field(..., min_length=7, max_length=45)
+    destination_port: int            = Field(..., ge=0, le=65535)
+    flow_duration:    int            = Field(..., ge=0)
+    # Ground-truth label from the dataset — NOT an ML prediction
+    label:            str | None     = Field(default=None, max_length=64)
+    metadata:         dict[str, str] = Field(default_factory=dict)
 
     @field_validator("event_time")
     @classmethod
@@ -26,15 +30,14 @@ class EventCreate(BaseModel):
 
 
 class EventIngestResponse(BaseModel):
-    status: str = "accepted"
-    sensor_id: str
+    status:     str      = "accepted"
+    sensor_id:  str
     event_time: datetime
-    message: str = "Event stored in Cassandra"
+    message:    str      = "Raw telemetry stored in Cassandra"
 
 
 class EventRecord(EventCreate):
-    """Stored event representation."""
-
+    """Stored event representation (read model)."""
     pass
 
 

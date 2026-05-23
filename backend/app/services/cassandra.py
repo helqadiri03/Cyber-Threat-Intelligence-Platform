@@ -1,4 +1,12 @@
-"""Cassandra connection singleton (cassandra-driver, sync with retry policy)."""
+"""Cassandra connection singleton (cassandra-driver, sync with retry policy).
+
+ARCHITECTURE NOTE:
+  Cassandra stores ONLY raw network telemetry (the streaming ingestion layer).
+  AI predictions (confidence, attack_type, model outputs) belong in MongoDB.
+  This table is query-driven:
+    - Partitioned by sensor_id for per-sensor time-series queries.
+    - Clustered by event_time DESC for efficient latest-events retrieval.
+"""
 
 from __future__ import annotations
 
@@ -14,11 +22,12 @@ from app.models.events import EventCreate
 
 LOG = logging.getLogger(__name__)
 
+# Only raw telemetry columns — no AI/ML fields
 INSERT_EVENT_CQL = """
 INSERT INTO attack_events (
-    sensor_id, event_time, attack_type, source_ip,
-    destination_port, flow_duration, label, confidence, metadata
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    sensor_id, event_time, source_ip,
+    destination_port, flow_duration, label, metadata
+) VALUES (?, ?, ?, ?, ?, ?, ?)
 """
 
 
@@ -70,6 +79,7 @@ class CassandraService:
         return True
 
     def insert_event(self, event: EventCreate) -> None:
+        """Persist a raw telemetry event. No AI fields written here."""
         if not self.is_connected:
             self.connect()
         assert self._session is not None and self._insert_stmt is not None
@@ -79,24 +89,23 @@ class CassandraService:
             (
                 event.sensor_id,
                 event.event_time,
-                event.attack_type,
                 event.source_ip,
                 event.destination_port,
                 event.flow_duration,
                 event.label,
-                event.confidence,
                 event.metadata or {},
             ),
         )
 
-    def fetch_recent_events(self, sensor_id: str, limit: int = 10) -> list[dict[str, Any]]:
+    def fetch_recent_events(self, sensor_id: str, limit: int = 100) -> list[dict[str, Any]]:
+        """Fetch the most recent telemetry events for a given sensor (newest first)."""
         if not self.is_connected:
             self.connect()
         assert self._session is not None
         rows = self._session.execute(
             """
-            SELECT sensor_id, event_time, attack_type, source_ip, destination_port,
-                   flow_duration, label, confidence, metadata
+            SELECT sensor_id, event_time, source_ip, destination_port,
+                   flow_duration, label, metadata
             FROM attack_events
             WHERE sensor_id = %s
             LIMIT %s

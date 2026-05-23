@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
 from app.models.common import HealthResponse
-from app.routers import alerts, events, predictions, statistics, websocket
+from app.routers import alerts, events, predictions, statistics, websocket, system
 from app.services.cassandra import CassandraService
 from app.services.mongodb import MongoDBService
 from app.services.redis import RedisService
@@ -68,6 +68,7 @@ app.include_router(alerts.router)
 app.include_router(predictions.router)
 app.include_router(statistics.router)
 app.include_router(websocket.router)
+app.include_router(system.router)
 
 
 @app.get("/health", response_model=HealthResponse)

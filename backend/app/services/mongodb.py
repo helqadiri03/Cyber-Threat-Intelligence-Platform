@@ -153,3 +153,12 @@ class MongoDBService:
             "timeline": timeline,
             "updated_at": now,
         }
+
+    async def clear_database(self) -> None:
+        """Clear predictions and attacker profiles from MongoDB."""
+        if not self.is_connected:
+            await self.connect()
+        await self.db.predictions.delete_many({})
+        await self.db.attacker_profiles.delete_many({})
+        LOG.info("MongoDB collections cleared successfully.")
+

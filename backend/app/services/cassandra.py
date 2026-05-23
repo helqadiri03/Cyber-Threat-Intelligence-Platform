@@ -113,3 +113,12 @@ class CassandraService:
             (sensor_id, limit),
         )
         return list(rows)
+
+    def truncate_events(self) -> None:
+        """Clear all raw network telemetry events in Cassandra."""
+        if not self.is_connected:
+            self.connect()
+        assert self._session is not None
+        self._session.execute("TRUNCATE attack_events")
+        LOG.info("Cassandra database truncated successfully.")
+

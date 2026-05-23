@@ -221,3 +221,32 @@ class RedisService:
     @staticmethod
     def new_session_id() -> str:
         return f"ws-{uuid.uuid4().hex[:12]}"
+
+    async def clear_redis_data(self) -> None:
+        """Clear alerts, statistics cache, and attack counters in Redis."""
+        if not self.is_connected:
+            await self.connect()
+        # Scan and delete alert keys
+        prefix = self._settings.redis_alert_key_prefix
+        async for key in self.client.scan_iter(match=f"{prefix}*"):
+            await self.client.delete(key)
+        # Scan and delete counter keys
+        async for key in self.client.scan_iter(match="counter:*"):
+            await self.client.delete(key)
+        # Delete statistics cache
+        await self.client.delete(self._settings.redis_stats_key)
+        LOG.info("Redis data (alerts, counters, cache) cleared successfully.")
+
+    async def get_producer_status(self) -> str:
+        """Get the ingestion producer status (running or stopped)."""
+        if not self.is_connected:
+            await self.connect()
+        val = await self.client.get("producer:status")
+        return val if val else "running"
+
+    async def set_producer_status(self, status: str) -> None:
+        """Set the ingestion producer status."""
+        if not self.is_connected:
+            await self.connect()
+        await self.client.set("producer:status", status)
+

@@ -52,6 +52,21 @@ def iter_row_dicts(data_dir: Path, batch_size: int):
             row_base += len(frame)
 
 
+def check_producer_status() -> str:
+    """Poll FastAPI backend system endpoint to check if producer should run or pause."""
+    import urllib.request
+    import json
+    try:
+        # Use a short 2.0s timeout to avoid locking the producer thread if backend is rebooting
+        url = os.getenv("BACKEND_URL", "http://backend:8000") + "/producer/status"
+        with urllib.request.urlopen(url, timeout=2.0) as res:
+            data = json.loads(res.read().decode("utf-8"))
+            return data.get("status", "running")
+    except Exception as exc:
+        # Default to running if connection fails so the system doesn't unexpectedly stall
+        return "running"
+
+
 def publish_stream(
     producer: Producer,
     topic: str,
@@ -70,6 +85,17 @@ def publish_stream(
         loop_id += 1
         LOG.info("Starting pass %s over %s", loop_id, data_dir)
         for source_file, row_idx, payload in iter_row_dicts(data_dir, batch_size):
+            # Check if producer has been stopped via dashboard
+            if sent % 100 == 0:
+                is_first_pause_log = True
+                while check_producer_status() == "stopped":
+                    if is_first_pause_log:
+                        LOG.info("=== PRODUCER PAUSED via dashboard action. Standing by... ===")
+                        is_first_pause_log = False
+                    time.sleep(1.0)
+                if not is_first_pause_log:
+                    LOG.info("=== PRODUCER RESUMED! Continuing traffic flow. ===")
+
             if max_rows and sent >= max_rows:
                 LOG.info("Reached max_rows=%s, stopping.", max_rows)
                 producer.flush()

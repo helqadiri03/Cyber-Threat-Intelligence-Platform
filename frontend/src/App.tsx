@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Shield, BarChart2, Bell, Database } from 'lucide-react';
+import { Shield, BarChart2, Bell, Database, Trash2, Play, Square } from 'lucide-react';
 import { LiveAlerts } from './components/LiveAlerts/LiveAlerts';
 import { StatisticsCharts } from './components/Statistics/StatisticsCharts';
 import { PredictionsTable } from './components/Predictions/PredictionsTable';
@@ -22,6 +22,74 @@ export default function App() {
   const { alerts, status, clearAlerts } = useWebSocket();
   const time = useClock();
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
+  const [producerStatus, setProducerStatus] = useState<'running' | 'stopped'>('running');
+  const [isResetting, setIsResetting] = useState(false);
+  const [isUpdatingProducer, setIsUpdatingProducer] = useState(false);
+
+  const fetchProducerStatus = async () => {
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/producer/status`);
+      const data = await res.json();
+      if (data && data.status) {
+        setProducerStatus(data.status);
+      }
+    } catch (err) {
+      console.error("Failed to fetch producer status", err);
+    }
+  };
+
+  useEffect(() => {
+    fetchProducerStatus();
+    const interval = setInterval(fetchProducerStatus, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleStopProducer = async () => {
+    setIsUpdatingProducer(true);
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/producer/stop`, { method: 'POST' });
+      if (res.ok) {
+        setProducerStatus('stopped');
+      }
+    } catch (err) {
+      console.error("Error stopping producer", err);
+    } finally {
+      setIsUpdatingProducer(false);
+    }
+  };
+
+  const handleStartProducer = async () => {
+    setIsUpdatingProducer(true);
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/producer/start`, { method: 'POST' });
+      if (res.ok) {
+        setProducerStatus('running');
+      }
+    } catch (err) {
+      console.error("Error starting producer", err);
+    } finally {
+      setIsUpdatingProducer(false);
+    }
+  };
+
+  const handleResetData = async () => {
+    const confirmed = window.confirm(
+      "CRITICAL ACTION:\nAre you absolutely sure you want to clear ALL historical predictions in MongoDB, raw telemetry in Cassandra, and real-time alerts in Redis?\n\nThis will completely reset the system to its initial state."
+    );
+    if (!confirmed) return;
+
+    setIsResetting(true);
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/system/reset`, { method: 'POST' });
+      const data = await res.json();
+      alert(data.message || "All database records have been successfully reset.");
+      window.location.reload();
+    } catch (err) {
+      alert("System reset failed: " + err);
+    } finally {
+      setIsResetting(false);
+    }
+  };
 
   const timeStr = time.toLocaleTimeString('en-US', { hour12: false });
   const dateStr = time.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
@@ -90,6 +158,50 @@ export default function App() {
       <main className={styles.main}>
         {(activeTab === 'dashboard') && (
           <>
+            {/* System Control Panel */}
+            <section className={styles.controlsCard}>
+              <div className={styles.controlsInfo}>
+                <div className={styles.controlsTitle}>
+                  <Shield size={16} className="text-accent" />
+                  <span>Ingestion & Database Operations Command Centre</span>
+                </div>
+                <div className={styles.controlsDesc}>
+                  Control real-time Kafka producer telemetry flows and execute system-wide database purges.
+                </div>
+              </div>
+
+              <div className={styles.controlsActions}>
+                {producerStatus === 'stopped' ? (
+                  <button
+                    className={`${styles.btnControl} ${styles.btnLaunch}`}
+                    onClick={handleStartProducer}
+                    disabled={isUpdatingProducer}
+                  >
+                    <Play size={14} fill="currentColor" />
+                    <span>{isUpdatingProducer ? 'Starting...' : 'Launch Ingestion'}</span>
+                  </button>
+                ) : (
+                  <button
+                    className={`${styles.btnControl} ${styles.btnStop}`}
+                    onClick={handleStopProducer}
+                    disabled={isUpdatingProducer}
+                  >
+                    <Square size={14} fill="currentColor" />
+                    <span>{isUpdatingProducer ? 'Stopping...' : 'Stop Ingestion'}</span>
+                  </button>
+                )}
+
+                <button
+                  className={`${styles.btnControl} ${styles.btnReset}`}
+                  onClick={handleResetData}
+                  disabled={isResetting}
+                >
+                  <Trash2 size={14} />
+                  <span>{isResetting ? 'Purging Databases...' : 'Reset All Databases'}</span>
+                </button>
+              </div>
+            </section>
+
             <section className={styles.statsSection}>
               <StatisticsCharts />
             </section>

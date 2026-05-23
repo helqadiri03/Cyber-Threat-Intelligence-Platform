@@ -217,3 +217,109 @@
   font-family: var(--font-mono);
   color: var(--text-muted);
 }
+
+/* ── System Controls ────────────────────────────────────────────────────── */
+.controlsCard {
+  background: var(--bg-card);
+  backdrop-filter: blur(var(--blur-window));
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 16px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  box-shadow: var(--shadow-sm);
+  position: relative;
+  overflow: hidden;
+}
+
+.controlsCard::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; bottom: 0;
+  width: 3px;
+  background: linear-gradient(180deg, var(--accent) 0%, var(--accent-2) 100%);
+  opacity: 0.8;
+}
+
+.controlsInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.controlsTitle {
+  font-family: var(--font-head);
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.controlsDesc {
+  font-size: 0.74rem;
+  color: var(--text-muted);
+}
+
+.controlsActions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.btnControl {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-radius: var(--radius-md);
+  font-size: 0.78rem;
+  font-weight: 600;
+  font-family: var(--font-head);
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all var(--transition);
+  outline: none;
+}
+
+.btnControl:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btnLaunch {
+  background: var(--sev-low-bg);
+  border-color: var(--sev-low-bdr);
+  color: var(--sev-low);
+}
+.btnLaunch:hover:not(:disabled) {
+  background: var(--sev-low);
+  color: #fff;
+  box-shadow: 0 0 16px var(--sev-low);
+}
+
+.btnStop {
+  background: var(--sev-high-bg);
+  border-color: var(--sev-high-bdr);
+  color: var(--sev-high);
+}
+.btnStop:hover:not(:disabled) {
+  background: var(--sev-high);
+  color: #fff;
+  box-shadow: 0 0 16px var(--sev-high);
+}
+
+.btnReset {
+  background: var(--sev-critical-bg);
+  border-color: var(--sev-critical-bdr);
+  color: var(--sev-critical);
+}
+.btnReset:hover:not(:disabled) {
+  background: var(--sev-critical);
+  color: #fff;
+  box-shadow: 0 0 16px var(--sev-critical);
+}
+

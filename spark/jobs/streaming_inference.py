@@ -96,8 +96,10 @@ def run_inference(df: DataFrame, models: ModelBundle, label_map_bc) -> DataFrame
     def decode_label(idx):
         return label_map_bc.value.get(float(idx), "Unknown")
 
+    # Store confidence as a probability in [0, 1] — mathematically correct for ML scores.
+    # risk_score is derived as: confidence * 100 * 0.6 + severity_weight * 0.4
     confidence_col = F.round(
-        F.array_max(vector_to_array(F.col("probability"))) * F.lit(100.0), 4
+        F.array_max(vector_to_array(F.col("probability"))), 6
     )
 
     result = (
@@ -112,9 +114,10 @@ def run_inference(df: DataFrame, models: ModelBundle, label_map_bc) -> DataFrame
             F.col("predicted_attack") == attack, F.lit(severity)
         ).otherwise(severity_expr)
 
+    # risk_score: normalise confidence to 0-100 scale first
     result = result.withColumn(
         "risk_score",
-        F.round(F.col("confidence") * F.lit(0.6) + severity_expr * F.lit(0.4), 2),
+        F.round(F.col("confidence") * F.lit(100.0) * F.lit(0.6) + severity_expr * F.lit(0.4), 2),
     )
     return result
 
@@ -129,6 +132,7 @@ def create_batch_processor(spark: SparkSession, models: ModelBundle):
     alerts_channel = os.getenv("REDIS_ALERTS_CHANNEL", "channel:alerts")
 
     def process_batch(batch_df: DataFrame, epoch_id: int) -> None:
+        import time as _time
         if batch_df.rdd.isEmpty():
             LOG.info("[epoch=%s] empty batch", epoch_id)
             return
@@ -136,6 +140,8 @@ def create_batch_processor(spark: SparkSession, models: ModelBundle):
         n = batch_df.count()
         LOG.info("[epoch=%s] processing %s events", epoch_id, n)
 
+        # Track inference latency in milliseconds
+        _t0 = _time.monotonic()
         enriched = run_inference(batch_df, models, label_map_bc)
         skip_cols = {
             "features",
@@ -146,6 +152,10 @@ def create_batch_processor(spark: SparkSession, models: ModelBundle):
         }
         output_cols = [c for c in enriched.columns if c not in skip_cols]
         flat_rows = [row.asDict() for row in enriched.select(*output_cols).collect()]
+        _latency_ms = round((_time.monotonic() - _t0) * 1000)
+        # Attach per-batch latency to every row
+        for row in flat_rows:
+            row["prediction_latency_ms"] = _latency_ms
 
         try:
             write_cassandra_events(enriched, cassandra_ks)

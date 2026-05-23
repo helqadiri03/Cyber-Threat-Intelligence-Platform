@@ -28,6 +28,12 @@ SEVERITY_BY_ATTACK: dict[str, int] = {
 
 
 def compute_risk_score(confidence: float, attack_type: str) -> float:
+    """Compute risk score from a probability confidence in [0, 1].
+
+    Formula: risk = (confidence * 100) * 0.6 + severity_weight * 0.4
+    This keeps risk in [0, 100] and rewards both high confidence and
+    inherently dangerous attack types.
+    """
     severity = SEVERITY_BY_ATTACK.get(attack_type, 50)
     return round(min(100.0, confidence * 100.0 * 0.6 + severity * 0.4), 2)
 
@@ -92,8 +98,11 @@ def write_mongo_predictions(
             {
                 "source_ip": row["source_ip"],
                 "predicted_attack": attack,
+                # Stored as probability in [0, 1] — ML-standard representation.
+                # Use risk_score for human-readable 0-100 severity.
                 "confidence": confidence,
                 "risk_score": risk,
+                "prediction_latency_ms": row.get("prediction_latency_ms"),
                 "model_name": row.get("model_name"),
                 "actual_label": row.get("Label"),
                 "sensor_id": row.get("sensor_id"),
@@ -155,8 +164,10 @@ def publish_redis_alerts(
             "attack_type": attack,
             "source_ip": row["source_ip"],
             "predicted_attack": attack,
+            # Probability [0,1]; multiply by 100 for percentage display
             "confidence": confidence,
             "risk_score": risk,
+            "prediction_latency_ms": row.get("prediction_latency_ms"),
             "actual_label": row.get("Label"),
             "event_time": str(row.get("event_time")),
             "timestamp": datetime.now(timezone.utc).isoformat(),

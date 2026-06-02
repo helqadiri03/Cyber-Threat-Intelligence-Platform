@@ -62,7 +62,7 @@ export function useWebSocket() {
         const alert: LiveAlert = {
           id: payload.id ?? crypto.randomUUID(),
           source_ip: payload.source_ip ?? '0.0.0.0',
-          predicted_attack: payload.predicted_attack ?? 'Unknown',
+          predicted_attack: payload.attack_type ?? payload.predicted_attack ?? 'Unknown',
           confidence: payload.confidence ?? 0,
           risk_score: payload.risk_score ?? 0,
           model_version: payload.model_version,
